@@ -88,8 +88,7 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
     names(output) <- c("columns","weights","lda")
     return(output)
   } else if (TYPE == "PCA") {
-    incl <- INCL_EXCL(DF,EXCLUDE)
-    df.pca <- stats::prcomp(df[,incl], center = TRUE, scale. = TRUE)
+    df.pca <- stats::prcomp(DF[,INCL_EXCL(DF,EXCLUDE)], center = TRUE, scale. = TRUE)
     PCA_columns <- df.pca$x[,c("PC1","PC2")]
     colnames(PCA_columns) <- c("PC1","PC2")
     output <- list(
@@ -148,11 +147,11 @@ binCounts <- function(x,y,increment_x,increment_y, pdf=TRUE) {
 }
 
 # Creates a TPS density surface based on a binning
-TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE) { #x_divisor=2,y_divisor=2,
+TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="special") { #x_divisor=2,y_divisor=2,
   x_axis <- DF[,x]
   y_axis <- DF[,y]
   return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
-                       "x", "y", output, x_name=x, y_name=y, z="counts", z_name="Frequency"))
+                       "x", "y", output, x_name=x, y_name=y, z="counts", z_name="Frequency", Lambda=Lambda))
 }
 
 # Returns a data-frame of an ellipse-segment of a TPS model given specific parameters
