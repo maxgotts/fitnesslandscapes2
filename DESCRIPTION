@@ -1,0 +1,25 @@
+Package: fitnesslandscapes2
+Type: Package
+Title: Tools for Fitness Landscapes Version 2.0
+Version: 1.0
+Authors@R: c( person("Max", "Gotts", role = c("aut", "cre"), email =
+          "mgotts@princeton.edu"), person("Lost Years Institute", role="cph", email="mg@lostyearsinstitute.org") )
+Author: Max Gotts [aut, cre], Lost Years Institute [cph]
+Date/Publication: 2021-27-06
+Maintainer: Max Gotts <mgotts@princeton.edu>
+Repository: CRAN
+Maintainer: Max Gotts <mgotts@princeton.edu>
+Description: Methods to make interacting with fitness/adaptive landscapes
+    easier and more pleasant. Specifically set up to progrommatically perform
+    projection pursuit regression, principal component analysis, linear discriminant analysis, create
+    thin plate spline interpolated fitness landscapes, density surfaces
+    (smoothed 3D histograms) and more.
+License: GPL (>= 2)
+Encoding: UTF-8
+Imports:
+  stats,
+  MASS,
+  fields,
+  plotly,
+  dplyr
+COPYRIGHTHOLDER: Max Gotts
