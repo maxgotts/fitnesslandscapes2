@@ -57,7 +57,7 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
   
   # Perform dimensionality reduction
   if (TYPE == "PPR") {
-    df.norm <- as.data.frame(scale(DF[,INCL_EXCL(DF, "Fitness")]))
+    df.norm <- as.data.frame(scale(DF[,INCL_EXCL(DF, VARIABLE)]))
     explanatory <- as.matrix(df.norm)
     response <- as.matrix(DF[,VARIABLE])
     df.ppr <- stats::ppr(explanatory,response,nterms=2,maxterms=5)
@@ -77,9 +77,13 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
     FORMULA <- as.formula(paste(VARIABLE,paste(INCL_EXCL(DF,c(VARIABLE)),collapse=" + "), sep=" ~ "))
     df.lda <- MASS::lda(FORMULA, DF)
     LD1 <- dotprod2(DF[,INCL_EXCL(DF,VARIABLE)], df.lda$scaling[,"LD1"])
-    LD2 <- dotprod2(DF[,INCL_EXCL(DF,VARIABLE)], df.lda$scaling[,"LD2"])
-    LDA_columns <- cbind(LD1,LD2)
-    colnames(LDA_columns) <- c("LD1","LD2")
+    if (ncol(df.lda$scaling) >= 2) {
+      LD2 <- dotprod2(DF[,INCL_EXCL(DF,VARIABLE)], df.lda$scaling[,"LD2"])
+      LDA_columns <- cbind(LD1,LD2)
+      colnames(LDA_columns) <- c("LD1","LD2")
+    } else {
+      LDA_columns <- data.frame(LD1=LD1)
+    }
     output <- list(
       LDA_columns,
       df.lda$scaling,
