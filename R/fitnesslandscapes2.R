@@ -1,4 +1,9 @@
+install.packages("~/fitnesslandscapes2", 
+                 repos = NULL, 
+                 type = "source")
+
 require("dplyr")
+require("ggplot2")
 
 # Easy dot product on data frame
 dotprod2 <- function(DF,vec) {
@@ -16,8 +21,8 @@ INCL_EXCL <- function(DF, EXCLUDE) {
 }
 
 
-# Performs PPR (and LDA) on a data set
-DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PPR", VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE) {
+# Performs PPR, PCA, and LDA on a data set
+DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PPR", VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE, VERBOSE=TRUE) {
   # Manage incorrect TYPE
   if (!(TYPE %in% c("PPR","LDA","PCA"))) {
     cat("Error: type incorrect\n")
@@ -26,10 +31,10 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
   
   # Figure out EXCLUSION versus INCLUSION
   if (EXCLUDE != FALSE && INCLUDE != FALSE) {
-    cat("Warning: both EXCLUDE and INCLUDE triggered, taking set difference\n")
-    return(DimReduction(DF, FALSE, setdiff(INCLUDE, EXCLUDE), TYPE, Variable)) 
+    if (VERBOSE==TRUE) cat("Warning: both EXCLUDE and INCLUDE triggered (perhaps implicitly), taking set difference\n")
+    return(DimReduction(DF, EXCLUDE=FALSE, INCLUDE=setdiff(INCLUDE, EXCLUDE), TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)) 
   } else if (EXCLUDE == FALSE && INCLUDE != FALSE) {
-    return(DimReduction(DF, INCL_EXCL(DF,INCLUDE), FALSE, TYPE, VARIABLE))
+    return(DimReduction(DF, EXCLUDE=INCL_EXCL(DF,INCLUDE), INCLUDE=FALSE, TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS))
   } else if(EXCLUDE == FALSE && INCLUDE == FALSE) {
     EXCLUDE <- c()
     exclusion_df <- data.frame()
@@ -42,13 +47,13 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
   RDA <- c("PC1","PC2","PP1","PP2","LD1","LD2")
   if (!IGNORE_PREVIOUS) {
     for (rda in RDA) {
-      if (rda %in% colnames(DF)) {
+      if (rda %in% colnames(DF) & VERBOSE==TRUE) {
         cat("Warning: ",rda," detected in column names\n", sep="")
       }
     }
   } else if (IGNORE_PREVIOUS) {
     for (rda in RDA) {
-      if (rda %in% colnames(DF)) {
+      if (rda %in% colnames(DF) & VERBOSE==TRUE) {
         cat("Warning: ",rda," detected in column names, ignoring now\n", sep="")
         DF[,rda] <- NULL
       }
@@ -71,6 +76,7 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
       pprdirections,
       df.ppr
     )
+    
     names(output) <- c("columns","weights","ppr")
     return(output)
   } else if (TYPE == "LDA") {
@@ -103,6 +109,40 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
     names(output) <- c("columns","weights","pca")
     return(output)
   }
+}
+
+
+PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE) {
+  PPR <- DimReduction(DF=DF, EXCLUDE=EXCLUDE, INCLUDE=INCLUDE, TYPE="PPR", VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)$weights
+  PP1_replicates <- as.data.frame(matrix(NA, nrow=0, ncol=nrow(PPR)))
+  colnames(PP1_replicates) <- rownames(PPR)
+  PP2_replicates <- as.data.frame(matrix(NA, nrow=0, ncol=nrow(PPR)))
+  colnames(PP2_replicates) <- rownames(PPR)
+  for (i in 1:nrow(DF)) {
+    the.rows <- setdiff(1:nrow(DF),i)
+    new.weights <- DimReduction(DF=DF[the.rows,], EXCLUDE=EXCLUDE, INCLUDE=INCLUDE, TYPE="PPR", VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)$weights
+    PP1_replicates[nrow(PP1_replicates)+1,] <- new.weights[,"term 1"]
+    PP2_replicates[nrow(PP2_replicates)+1,] <- new.weights[,"term 2"]
+  }
+  
+  PP1_weights <- PPR[,"term 1"]
+  PP2_weights <- PPR[,"term 2"]
+  
+  PP1_dots <- c()
+  PP2_dots <- c()
+  for (i in 1:nrow(PP1_replicates)) {
+    PP1_dots[i] <- sum(PP1_weights*PP1_replicates[i,])
+    PP2_dots[i] <- sum(PP2_weights*PP2_replicates[i,])
+  }
+  
+  return(list(
+    PP1_replicates=PP1_dots,
+    PP1_median=median(PP1_dots),
+    PP1_ratio=sum(PP1_dots>0)/length(PP1_dots),
+    PP2_replicates=PP2_dots,
+    PP2_median=median(PP2_dots),
+    PP2_ratio=sum(PP2_dots>0)/length(PP2_dots)
+  ))
 }
 
 
@@ -151,12 +191,35 @@ binCounts <- function(x,y,increment_x,increment_y, pdf=TRUE) {
 }
 
 # Creates a TPS density surface based on a binning
-TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="special") { #x_divisor=2,y_divisor=2,
+TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="special",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
   x_axis <- DF[,x]
   y_axis <- DF[,y]
   return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
-                       "x", "y", output, x_name=x, y_name=y, z="counts", z_name="Frequency", Lambda=Lambda))
+                       "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda))
 }
+
+
+fitnesslandscape <- function(DF=df,z="Fitness",smoothing="default") {
+  DF <- DF[!is.na(colnames(DF)),]
+  pprr <- PPR_replicates(DF=DF, EXCLUDE=FALSE, INCLUDE=FALSE, VARIABLE=z)
+  if (pprr$PP1_median > 0 & pprr$PP2_median) {
+    X <- "PP1"
+    Y <- "PP2"
+    method <- "PPR"
+  } else {
+    X <- "PC1"
+    Y <- "PC2"
+    method <- "PCA"
+  }
+  DF[,c(X,Y)] <- DimReduction(DF=DF, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE=method, VARIABLE=z)$columns
+  ggplot(DF, aes(x=Fitness))+geom_histogram()+theme_classic()
+  TPS_distribution(DF=DF,x=X,y=Y,output="wireframe",Theta=30,Phi=30,pdf=FALSE, Lambda="special",x_name=X,y_name=Y,z_name="Frequency")
+  TPS_distribution(DF=DF,x=X,y=Y,output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="special",x_name=X,y_name=Y,z_name="Frequency")
+  TPS_landscape(DF=DF, x=X, y=Y, output="wireframe", Theta=30, Phi=30, z=z, x_name=X, y_name=X, z_name=z, Lambda=smoothing)
+  TPS_landscape(DF=DF, x=X, y=Y, output="contour", Theta=30, Phi=30, z=z, x_name=X, y_name=Y, z_name=z, Lambda=smoothing)
+}
+
+
 
 # Returns a data-frame of an ellipse-segment of a TPS model given specific parameters
 ellipse_at <- function(center, radius, increment, tps_model, pdf) {
