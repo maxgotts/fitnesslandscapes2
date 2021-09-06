@@ -1,6 +1,10 @@
-install.packages("~/fitnesslandscapes2", 
-                 repos = NULL, 
-                 type = "source")
+if (FALSE) {
+  ## Restart session and do (in shell):
+  ## tar czf fitnesslandscapes2.tar.gz fitnesslandscapes2 & R CMD INSTALL fitnesslandscapes2.tar.gz
+  ## or do:
+  install.packages("~/fitnesslandscapes2", repos = NULL, type = "source")
+  library(fitnesslandscapes2)
+}
 
 require("dplyr")
 require("ggplot2")
@@ -34,7 +38,9 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
     if (VERBOSE==TRUE) cat("Warning: both EXCLUDE and INCLUDE triggered (perhaps implicitly), taking set difference\n")
     return(DimReduction(DF, EXCLUDE=FALSE, INCLUDE=setdiff(INCLUDE, EXCLUDE), TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)) 
   } else if (EXCLUDE == FALSE && INCLUDE != FALSE) {
-    return(DimReduction(DF, EXCLUDE=INCL_EXCL(DF,INCLUDE), INCLUDE=FALSE, TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS))
+    exclude_vector <- setdiff(INCL_EXCL(DF,INCLUDE),VARIABLE)
+    if (length(exclude_vector)==0) exclude_vector <- FALSE
+    return(DimReduction(DF, EXCLUDE=exclude_vector, INCLUDE=FALSE, TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS))
   } else if(EXCLUDE == FALSE && INCLUDE == FALSE) {
     EXCLUDE <- c()
     exclusion_df <- data.frame()
@@ -65,10 +71,11 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
     df.norm <- as.data.frame(scale(DF[,INCL_EXCL(DF, VARIABLE)]))
     explanatory <- as.matrix(df.norm)
     response <- as.matrix(DF[,VARIABLE])
-    df.ppr <- stats::ppr(explanatory,response,nterms=2,maxterms=5)
+    df.ppr <- stats::ppr(explanatory,response,nterms=2,maxterms=ncol(DF))
     pprdirections <- df.ppr$alpha
-    PP1 <- dotprod2(df.norm, pprdirections[,"term 1"])
-    PP2 <- dotprod2(df.norm, pprdirections[,"term 2"])
+    colnames(pprdirections) <- c("PP1","PP2")
+    PP1 <- dotprod2(df.norm, pprdirections[,"PP1"])
+    PP2 <- dotprod2(df.norm, pprdirections[,"PP2"])
     PPR_columns <- cbind(PP1,PP2)
     colnames(PPR_columns) <- c("PP1","PP2")
     output <- list(
@@ -120,13 +127,13 @@ PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, VARIAB
   colnames(PP2_replicates) <- rownames(PPR)
   for (i in 1:nrow(DF)) {
     the.rows <- setdiff(1:nrow(DF),i)
-    new.weights <- DimReduction(DF=DF[the.rows,], EXCLUDE=EXCLUDE, INCLUDE=INCLUDE, TYPE="PPR", VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)$weights
-    PP1_replicates[nrow(PP1_replicates)+1,] <- new.weights[,"term 1"]
-    PP2_replicates[nrow(PP2_replicates)+1,] <- new.weights[,"term 2"]
+    new.weights <- DimReduction(DF=DF[the.rows,], EXCLUDE=EXCLUDE, INCLUDE=INCLUDE, TYPE="PPR", VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS, VERBOSE=FALSE)$weights
+    PP1_replicates[nrow(PP1_replicates)+1,] <- new.weights[,"PP1"]
+    PP2_replicates[nrow(PP2_replicates)+1,] <- new.weights[,"PP2"]
   }
   
-  PP1_weights <- PPR[,"term 1"]
-  PP2_weights <- PPR[,"term 2"]
+  PP1_weights <- PPR[,"PP1"]
+  PP2_weights <- PPR[,"PP2"]
   
   PP1_dots <- c()
   PP2_dots <- c()
@@ -148,7 +155,8 @@ PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, VARIAB
 
 
 # Returns a fitness landscape given specific parameters
-TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, Phi=30, z="Fitness", x_name=x, y_name=y, z_name=z, Lambda="special") {
+TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, Phi=30, z="Fitness", x_name=x, y_name=y, z_name=z, Lambda="default", zlim=NULL) {
+  par(mar=c(5,5,2,1)+.1)
   Var1 <- DF[,x]
   Var2 <- DF[,y]
   Fitness <- DF[,z]
@@ -163,10 +171,18 @@ TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, P
   }
 
   if (output=="plotly") return(plotly::plot_ly(z=~fields::predictSurface(t)$z) %>% plotly::add_surface())
-  if (output=="contour") return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name))
-  if (output=="wireframe") return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi))
-  if (output=="matrix") return(fields::predictSurface(t)$z)
+  if (output=="contour" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name))
+  if (output=="contour" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,zlim=zlim))
+  if (output=="wireframe" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi))
+  if (output=="wireframe" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi,zlim=zlim))
+  if (output=="matrix") {
+    p <- fields::predictSurface(t)
+    return(list(x=p$x, y=p$y, z=p$z))
+  }
   if (output=="model") return(t)
+  else print("Error: wrong `output` type")
+  
+  # https://stackoverflow.com/questions/18881546/creating-a-trellised-faceted-thin-plate-spline-response-surface
 }
 
 # Creates a 2D frequency-binning
@@ -191,17 +207,26 @@ binCounts <- function(x,y,increment_x,increment_y, pdf=TRUE) {
 }
 
 # Creates a TPS density surface based on a binning
-TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="special",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
+TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="default",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
   x_axis <- DF[,x]
   y_axis <- DF[,y]
   return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
                        "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda))
 }
 
+# TPS_distribution <- function(DF=df,x="PP1",y="PP2",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
+#   return(ggplot(df.2018, aes_string(x=x, y=y))+
+#            stat_density_2d(aes(fill = ..level..), geom = "polygon", colour="white")+
+#            theme_classic()+
+#            labs(x=x_name,y=y_name,fill=z_name)+
+#            scale_fill_distiller(palette="Spectral", direction=-1))
+# }
 
-fitnesslandscape <- function(DF=df,z="Fitness",smoothing="default") {
+
+fitnesslandscape <- function(DF=df,z="Fitness",smoothing="default",output="full") {
   DF <- DF[!is.na(colnames(DF)),]
   pprr <- PPR_replicates(DF=DF, EXCLUDE=FALSE, INCLUDE=FALSE, VARIABLE=z)
+  cat("PPR median replicates: (PP1)",pprr$PP1_median, pprr$PP2_median,"\n")
   if (pprr$PP1_median > 0 & pprr$PP2_median) {
     X <- "PP1"
     Y <- "PP2"
@@ -212,10 +237,12 @@ fitnesslandscape <- function(DF=df,z="Fitness",smoothing="default") {
     method <- "PCA"
   }
   DF[,c(X,Y)] <- DimReduction(DF=DF, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE=method, VARIABLE=z)$columns
-  ggplot(DF, aes(x=Fitness))+geom_histogram()+theme_classic()
-  TPS_distribution(DF=DF,x=X,y=Y,output="wireframe",Theta=30,Phi=30,pdf=FALSE, Lambda="special",x_name=X,y_name=Y,z_name="Frequency")
-  TPS_distribution(DF=DF,x=X,y=Y,output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="special",x_name=X,y_name=Y,z_name="Frequency")
-  TPS_landscape(DF=DF, x=X, y=Y, output="wireframe", Theta=30, Phi=30, z=z, x_name=X, y_name=X, z_name=z, Lambda=smoothing)
+  if (output!="simple") {
+    ggplot(DF, aes(x=Fitness))+geom_histogram()+theme_classic()
+    TPS_distribution(DF=DF,x=X,y=Y,output="wireframe",Theta=30,Phi=30,pdf=FALSE, Lambda=smoothing,x_name=X,y_name=Y,z_name="Frequency")
+    TPS_distribution(DF=DF,x=X,y=Y,output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda=smoothing,x_name=X,y_name=Y,z_name="Frequency")
+    TPS_landscape(DF=DF, x=X, y=Y, output="wireframe", Theta=30, Phi=30, z=z, x_name=X, y_name=X, z_name=z, Lambda=smoothing)
+  }
   TPS_landscape(DF=DF, x=X, y=Y, output="contour", Theta=30, Phi=30, z=z, x_name=X, y_name=Y, z_name=z, Lambda=smoothing)
 }
 
@@ -254,3 +281,19 @@ ellipse_at <- function(center, radius, increment, tps_model, pdf) {
   }
   return(ellipse)
 }
+
+square_at <- function(min_x, max_x, increment_x, min_y, max_y, increment_y, tps_model, VERBOSE=FALSE) {
+  if (VERBOSE) print(min_x)
+  if (VERBOSE) print(max_x)
+  x_seq <- seq(min_x, max_x, increment_x)
+  # print(x_seq)
+  if (VERBOSE) print(min_y)
+  if (VERBOSE) print(max_y)
+  y_seq <- seq(min_y, max_y, increment_y)
+  # print(y_seq)
+  square <- expand.grid(x=x_seq, y=y_seq)
+  square$z <- NA
+  square$z <- predict(tps_model, square[,c("x","y")])
+  return(square)
+}
+
