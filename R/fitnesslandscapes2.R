@@ -8,6 +8,8 @@ if (FALSE) {
 
 require("dplyr")
 require("ggplot2")
+require("vegan")
+require("scatterplot3d")
 
 # Easy dot product on data frame
 dotprod2 <- function(DF,vec) {
@@ -28,7 +30,7 @@ INCL_EXCL <- function(DF, EXCLUDE) {
 # Performs PPR, PCA, and LDA on a data set
 DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PPR", VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE, VERBOSE=TRUE) {
   # Manage incorrect TYPE
-  if (!(TYPE %in% c("PPR","LDA","PCA"))) {
+  if (!(TYPE %in% c("PPR","LDA","PCA","NMDS"))) {
     cat("Error: type incorrect\n")
     return(NULL)
   }
@@ -50,7 +52,7 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
   }
   
   # Flag previously generated columns
-  RDA <- c("PC1","PC2","PP1","PP2","LD1","LD2")
+  RDA <- c("PC1","PC2","PP1","PP2","LD1","LD2","NMDS1","NMDS2")
   if (!IGNORE_PREVIOUS) {
     for (rda in RDA) {
       if (rda %in% colnames(DF) & VERBOSE==TRUE) {
@@ -115,6 +117,24 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
     )
     names(output) <- c("columns","weights","pca")
     return(output)
+  } else if (TYPE == "NMDS") {
+    df.metric <- as.data.frame(scale(DF[,INCL_EXCL(DF,EXCLUDE)]))
+    metric_matrix <- matrix(NA,nrow(df.metric),nrow(df.metric))
+    rownames(metric_matrix) <- rownames(df.metric)
+    colnames(metric_matrix) <- rownames(df.metric)
+    for (row_i in 1:nrow(df.metric)) {
+      for (row_j in row_i:nrow(df.metric)) {
+        del_vector <- df.metric[row_i,]-df.metric[row_j,]
+        metric_matrix[row_i,row_j] <- metric_matrix[row_j,row_i] <- sum(del_vector*del_vector)
+      }
+    }
+    NMDS_result <- vegan::metaMDS(metric_matrix,k=2)
+    output <- list(
+      NMDS_result$points,
+      NMDS_result
+    )
+    names(output) <- c("columns","nmds")
+    return(output)
   }
 }
 
@@ -171,15 +191,26 @@ TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, P
   }
 
   if (output=="plotly") return(plotly::plot_ly(z=~fields::predictSurface(t)$z) %>% plotly::add_surface())
-  if (output=="contour" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name))
-  if (output=="contour" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,zlim=zlim))
-  if (output=="wireframe" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi))
-  if (output=="wireframe" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi,zlim=zlim))
-  if (output=="matrix") {
+  else if (output=="contour" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name))
+  else if (output=="contour" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,zlim=zlim))
+  else if (output=="wireframe" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi))
+  else if (output=="wireframe" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi,zlim=zlim))
+  else if (output=="matrix") {
     p <- fields::predictSurface(t)
     return(list(x=p$x, y=p$y, z=p$z))
   }
-  if (output=="model") return(t)
+  else if (output=="model") return(t)
+  else if (output=="scatter3") return(scatterplot3d::scatterplot3d(df[,c(x,y,z)], type="h"))
+  else if (output=="scatter2") {
+    return(ggplot(df, aes_string(x=x,y=y,color=z))+geom_point(size=3)+theme_classic()+scale_colour_gradient(
+      low = "#173F5F",
+      high = "#ED553B",
+      space = "Lab",
+      na.value = "grey50",
+      guide = "colourbar",
+      aesthetics = "colour"
+    ))
+  }
   else print("Error: wrong `output` type")
   
   # https://stackoverflow.com/questions/18881546/creating-a-trellised-faceted-thin-plate-spline-response-surface
