@@ -242,7 +242,7 @@ TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi
   x_axis <- DF[,x]
   y_axis <- DF[,y]
   return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
-                       "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda))
+                       "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi))
 }
 
 # TPS_distribution <- function(DF=df,x="PP1",y="PP2",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
