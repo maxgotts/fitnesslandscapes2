@@ -328,3 +328,14 @@ square_at <- function(min_x, max_x, increment_x, min_y, max_y, increment_y, tps_
   return(square)
 }
 
+EPI <- function(DF=df,x="PP1",y="PP2",z="Fitness",Lambda="default") {
+  fitness <- TPS_landscape(DF=DF,x=x,y=y,z=z,Lambda=Lambda,output="matrix")$z ### problems with alignment
+  fitness <- fitness/max(fitness,na.rm=T)
+  distribution <- TPS_distribution(DF=DF,x=x,y=y,z=z,Lambda=Lambda,output="matrix")$z
+  distribution <- distribution/max(distribution,na.rm=T)
+  sizeofmatrix <- fitness-distribution
+  sizeofmatrix[!is.na(sizeofmatrix)] <- 1
+  sizeof <- sum(sizeofmatrix,na.rm=T)
+  return(1-sum((fitness-distribution)^2/sizeof,na.rm=T))
+}
+
