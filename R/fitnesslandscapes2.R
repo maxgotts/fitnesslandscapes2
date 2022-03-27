@@ -2,7 +2,7 @@ if (FALSE) {
   ## Restart session and do (in shell):
   ## tar czf fitnesslandscapes2.tar.gz fitnesslandscapes2 & R CMD INSTALL fitnesslandscapes2.tar.gz
   ## or do:
-  install.packages("~/fitnesslandscapes2", repos = NULL, type = "source")
+  install.packages("~/fitnesslandscapes2", repos = NULL, type = "source") # cmd + shift + 0
   library(fitnesslandscapes2)
 }
 
@@ -10,6 +10,7 @@ require("dplyr")
 require("ggplot2")
 require("vegan")
 require("scatterplot3d")
+require("fields")
 
 # Easy dot product on data frame
 dotprod2 <- function(DF,vec) {
@@ -328,14 +329,20 @@ square_at <- function(min_x, max_x, increment_x, min_y, max_y, increment_y, tps_
   return(square)
 }
 
-EPI <- function(DF=df,x="PP1",y="PP2",z="Fitness",Lambda="default") {
-  fitness <- TPS_landscape(DF=DF,x=x,y=y,z=z,Lambda=Lambda,output="matrix")$z ### problems with alignment
-  fitness <- fitness/max(fitness,na.rm=T)
-  distribution <- TPS_distribution(DF=DF,x=x,y=y,z=z,Lambda=Lambda,output="matrix")$z
-  distribution <- distribution/max(distribution,na.rm=T)
-  sizeofmatrix <- fitness-distribution
-  sizeofmatrix[!is.na(sizeofmatrix)] <- 1
-  sizeof <- sum(sizeofmatrix,na.rm=T)
-  return(1-sum((fitness-distribution)^2/sizeof,na.rm=T))
+EPI <- function(DF=df,x="PP1",y="PP2",z="Fitness",Lambda="default",resolution=c(20,20)) {
+  X <- seq(min(from=DF[,x]),to=max(DF[,x]),length.out=resolution[1])
+  Y <- seq(min(from=DF[,y]),to=max(DF[,y]),length.out=resolution[2])
+  phenotype_space <- expand.grid(X,Y)
+  colnames(phenotype_space) <- c(x,y)
+  fitnessModel <- TPS_landscape(DF=DF,x=x,y=y,z=z,Lambda=Lambda,output="model")
+  phenotype_space$fitness <- predict(fitnessModel,phenotype_space)
+  phenotype_space$fitness <- phenotype_space$fitness/max(phenotype_space$fitness,na.rm=T)
+  distributionModel <- TPS_distribution(DF=DF,x=x,y=y,z=z,Lambda=Lambda,output="model")
+  phenotype_space$distribution <- predict(distributionModel,phenotype_space[,c(x,y)])
+  phenotype_space$distribution <- phenotype_space$distribution/max(phenotype_space$distribution,na.rm=T)
+  return(1-(mean((abs(phenotype_space$fitness-phenotype_space$distribution))^(2),na.rm=T)))
+  # return(1-mean((abs(phenotype_space$fitness-phenotype_space$distribution))^(1),na.rm=T))
 }
+# return(1-mean((phenotype_space$fitness-phenotype_space$distribution)^2,na.rm=T))
+# return(1-mean(abs(phenotype_space$fitness-phenotype_space$distribution),na.rm=T))
 
