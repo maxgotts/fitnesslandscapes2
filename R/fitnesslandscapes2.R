@@ -242,8 +242,13 @@ binCounts <- function(x,y,increment_x,increment_y, pdf=TRUE) {
 TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="default",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
   x_axis <- DF[,x]
   y_axis <- DF[,y]
-  return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
-                       "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi))
+  if (output!="distribution") {
+    return()
+  } else if (output=="distribution") {
+    model <- TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
+                  "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi)
+    return(predict(model, DF[,c(x,y)]))
+  }
 }
 
 # TPS_distribution <- function(DF=df,x="PP1",y="PP2",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
@@ -257,18 +262,23 @@ TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi
 
 fitnesslandscape <- function(DF=df,z="Fitness",smoothing="default",output="full") {
   DF <- DF[!is.na(colnames(DF)),]
-  pprr <- PPR_replicates(DF=DF, EXCLUDE=FALSE, INCLUDE=FALSE, VARIABLE=z)
-  cat("PPR median replicates: (PP1)",pprr$PP1_median, pprr$PP2_median,"\n")
-  if (pprr$PP1_median > 0 & pprr$PP2_median) {
-    X <- "PP1"
-    Y <- "PP2"
-    method <- "PPR"
+  if (ncol(DF) == 3) {
+    X <- setdiff(colnames(DF),z)[1]
+    Y <- setdiff(colnames(DF),z)[2]
   } else {
-    X <- "PC1"
-    Y <- "PC2"
-    method <- "PCA"
+    pprr <- PPR_replicates(DF=DF, EXCLUDE=FALSE, INCLUDE=FALSE, VARIABLE=z)
+    cat("PPR median replicates: (PP1)",pprr$PP1_median, pprr$PP2_median,"\n")
+    if (pprr$PP1_median > 0 & pprr$PP2_median) {
+      X <- "PP1"
+      Y <- "PP2"
+      method <- "PPR"
+    } else {
+      X <- "PC1"
+      Y <- "PC2"
+      method <- "PCA"
+    }
+    DF[,c(X,Y)] <- DimReduction(DF=DF, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE=method, VARIABLE=z)$columns
   }
-  DF[,c(X,Y)] <- DimReduction(DF=DF, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE=method, VARIABLE=z)$columns
   if (output!="simple") {
     ggplot(DF, aes(x=Fitness))+geom_histogram()+theme_classic()
     TPS_distribution(DF=DF,x=X,y=Y,output="wireframe",Theta=30,Phi=30,pdf=FALSE, Lambda=smoothing,x_name=X,y_name=Y,z_name="Frequency")
