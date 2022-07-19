@@ -29,7 +29,7 @@ INCL_EXCL <- function(DF, EXCLUDE) {
 
 
 # Performs PPR, PCA, and LDA on a data set
-DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PPR", VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE, VERBOSE=TRUE) {
+DRA <- DimReduction <- function(DF=df, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE="PPR", VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE, VERBOSE=TRUE) { #c("Identifier")
   # Manage incorrect TYPE
   if (!(TYPE %in% c("PPR","LDA","PCA","NMDS"))) {
     cat("Error: type incorrect\n")
@@ -53,7 +53,7 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
   }
   
   # Flag previously generated columns
-  RDA <- c("PC1","PC2","PP1","PP2","LD1","LD2","NMDS1","NMDS2")
+  RDA <- c("PC1","PC2","PP1","PP2","LD1","LD2","NMDS1","NMDS2","RD1","RD2")
   if (!IGNORE_PREVIOUS) {
     for (rda in RDA) {
       if (rda %in% colnames(DF) & VERBOSE==TRUE) {
@@ -140,7 +140,7 @@ DimReduction <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, TYPE="PP
 }
 
 
-PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE) {
+bootstrap <- PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE) {
   PPR <- DimReduction(DF=DF, EXCLUDE=EXCLUDE, INCLUDE=INCLUDE, TYPE="PPR", VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)$weights
   PP1_replicates <- as.data.frame(matrix(NA, nrow=0, ncol=nrow(PPR)))
   colnames(PP1_replicates) <- rownames(PPR)
@@ -176,7 +176,7 @@ PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, VARIAB
 
 
 # Returns a fitness landscape given specific parameters
-TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, Phi=30, z="Fitness", x_name=x, y_name=y, z_name=z, Lambda="default", zlim=NULL) {
+landscape <- TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, Phi=30, z="Fitness", x_name=x, y_name=y, z_name=z, Lambda="default", zlim=NULL) {
   par(mar=c(5,5,2,1)+.1)
   Var1 <- DF[,x]
   Var2 <- DF[,y]
@@ -211,6 +211,8 @@ TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, P
       guide = "colourbar",
       aesthetics = "colour"
     ))
+  } else if (output=="fitness") {
+    return(predict(t, DF[,c(x,y)]))
   }
   else print("Error: wrong `output` type")
   
@@ -239,14 +241,17 @@ binCounts <- function(x,y,increment_x,increment_y, pdf=TRUE) {
 }
 
 # Creates a TPS density surface based on a binning
-TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="default",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
+distribution <- TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="default",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
   x_axis <- DF[,x]
   y_axis <- DF[,y]
   if (output!="distribution") {
-    return()
+    return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
+                         "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi))
   } else if (output=="distribution") {
+    # return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
+                         # "x", "y", output="fitness", x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi))
     model <- TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
-                  "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi)
+                  "x", "y", "model", x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi)
     return(predict(model, DF[,c(x,y)]))
   }
 }
