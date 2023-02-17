@@ -11,6 +11,7 @@ require("ggplot2")
 require("vegan")
 require("scatterplot3d")
 require("fields")
+require("ks")
 
 # Easy dot product on data frame
 dotprod2 <- function(DF,vec) {
@@ -140,7 +141,7 @@ DRA <- DimReduction <- function(DF=df, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE="PPR",
 }
 
 
-bootstrap <- PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE) {
+PPR_bootstrap <- PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=FALSE, VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE) {
   PPR <- DimReduction(DF=DF, EXCLUDE=EXCLUDE, INCLUDE=INCLUDE, TYPE="PPR", VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)$weights
   PP1_replicates <- as.data.frame(matrix(NA, nrow=0, ncol=nrow(PPR)))
   colnames(PP1_replicates) <- rownames(PPR)
@@ -176,26 +177,31 @@ bootstrap <- PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCLUDE=
 
 
 # Returns a fitness landscape given specific parameters
-landscape <- TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, Phi=30, z="Fitness", x_name=x, y_name=y, z_name=z, Lambda="default", zlim=NULL) {
+landscape <- TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, Phi=30, z="Fitness", x_name=x, y_name=y, z_name=z, Lambda="default", zlim=NULL, COLOUR="rainbow") {
   par(mar=c(5,5,2,1)+.1)
   Var1 <- DF[,x]
   Var2 <- DF[,y]
   Fitness <- DF[,z]
   tp.m <- as.matrix(data.frame(v1=Var1, v2=Var2))
 
-  if (Lambda == "default") {
-    t <- fields::Tps(x=tp.m, Y=Fitness)
-  } else if (Lambda == "special") {
-    t <- fields::Tps(x=tp.m, Y=Fitness, lambda=0.02691373)
-  } else {
-    t <- fields::Tps(x=tp.m, Y=Fitness,lambda=Lambda)
+  if (!(output %in% c("scatter2", "scatter3")) {
+    if (Lambda == "default") {
+      t <- fields::Tps(x=tp.m, Y=Fitness)
+    } else if (Lambda == "special") {
+      t <- fields::Tps(x=tp.m, Y=Fitness, lambda=0.02691373)
+    } else {
+      t <- fields::Tps(x=tp.m, Y=Fitness,lambda=Lambda)
+    }
   }
+  
+  if (COLOUR=="rainbow") COLOUR <- fields::tim.colors(256)
+  else if (COLOUR=="snow") COLOUR <- fields::snow.colors(n=256, alpha=1)
 
   if (output=="plotly") return(plotly::plot_ly(z=~fields::predictSurface(t)$z) %>% plotly::add_surface())
-  else if (output=="contour" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name))
-  else if (output=="contour" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,zlim=zlim))
-  else if (output=="wireframe" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi))
-  else if (output=="wireframe" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi,zlim=zlim))
+  else if (output=="contour" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name, col=COLOUR))
+  else if (output=="contour" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,zlim=zlim, col=COLOUR))
+  else if (output=="wireframe" & is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi, col=COLOUR))
+  else if (output=="wireframe" & !is.null(zlim)) return(fields::surface(t, xlab=x_name, ylab=y_name, zlab=z_name,type="p", theta=Theta, phi=Phi,zlim=zlim, col=COLOUR))
   else if (output=="matrix") {
     p <- fields::predictSurface(t)
     return(list(x=p$x, y=p$y, z=p$z))
@@ -240,19 +246,35 @@ binCounts <- function(x,y,increment_x,increment_y, pdf=TRUE) {
   return(counts)
 }
 
+kernalDensity <- function(x,y) {
+  DF <- data.frame(x=x,y=y)
+  DF$KDE <- ks::kde(DF, eval.point=DF)$estimate
+  colnames(DF) <- c("x","y","z")
+  return(DF)
+}
+
 # Creates a TPS density surface based on a binning
-distribution <- TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="default",x_name=x,y_name=y,z_name="Frequency") { #x_divisor=2,y_divisor=2,
+distribution <- TPS_distribution <- function(DF=df,x="PP1",y="PP2",output="contour",Theta=30,Phi=30,pdf=FALSE, Lambda="default",x_name=x,y_name=y,z_name="Frequency",COLOUR="snow",method="kde") { #x_divisor=2,y_divisor=2,
   x_axis <- DF[,x]
   y_axis <- DF[,y]
-  if (output!="distribution") {
-    return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
-                         "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi))
-  } else if (output=="distribution") {
-    # return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
-                         # "x", "y", output="fitness", x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi))
-    model <- TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
-                  "x", "y", "model", x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi)
-    return(predict(model, DF[,c(x,y)]))
+  if (method=="binning") {
+    if (output!="distribution") {
+      return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
+                           "x", "y", output, x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi,COLOUR=COLOUR))
+    } else if (output=="distribution") {
+      # return(TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
+                           # "x", "y", output="fitness", x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi))
+      model <- TPS_landscape(binCounts(x_axis, y_axis, increment_x=sd(x_axis)/3, increment_y=sd(y_axis)/3, pdf=pdf),
+                    "x", "y", "model", x_name=x_name, y_name=y_name, z="counts", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi,COLOUR=COLOUR)
+      return(predict(model, DF[,c(x,y)]))
+    }
+  } else if (method%in%c("kernal","kde","density")) {
+    kde_out <- kernalDensity(x_axis,y_axis)
+    if (output!="distribution") {
+      return(TPS_landscape(kde_out,"x", "y", output, x_name=x_name, y_name=y_name, z="z", z_name=z_name, Lambda=Lambda, Theta=Theta, Phi=Phi,COLOUR=COLOUR))
+    } else if (output=="distribution") {
+      return(kde_out)
+    }
   }
 }
 
