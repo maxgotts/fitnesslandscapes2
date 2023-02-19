@@ -184,7 +184,7 @@ landscape <- TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour"
   Fitness <- DF[,z]
   tp.m <- as.matrix(data.frame(v1=Var1, v2=Var2))
 
-  if (!(output %in% c("scatter2", "scatter3")) {
+  if (!(output %in% c("scatter2", "scatter3"))) {
     if (Lambda == "default") {
       t <- fields::Tps(x=tp.m, Y=Fitness)
     } else if (Lambda == "special") {
