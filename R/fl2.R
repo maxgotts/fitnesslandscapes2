@@ -2,14 +2,13 @@ if (FALSE) {
   ## Restart session and do (in shell):
   ## tar czf fitnesslandscapes2.tar.gz fitnesslandscapes2 & R CMD INSTALL fitnesslandscapes2.tar.gz
   ## or do:
-  install.packages("~/fitnesslandscapes2", repos = NULL, type = "source") # cmd + shift + 0
-  library(fitnesslandscapes2)
+  install.packages("~/Desktop/Research/futureInterpolate", repos = NULL, type = "source") # cmd + shift + 0
+  library(futureInterpolate)
 }
 
 require("dplyr")
 require("ggplot2")
 require("vegan")
-require("scatterplot3d")
 require("fields")
 require("ks")
 
@@ -30,7 +29,7 @@ INCL_EXCL <- function(DF, EXCLUDE) {
 
 
 # Performs PPR, PCA, and LDA on a data set
-DRA <- DimReduction <- function(DF=df, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE="PPR", VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE, VERBOSE=TRUE) { #c("Identifier")
+DRA <- DimReduction <- function(DF=df, EXCLUDE=NULL, INCLUDE=NULL, TYPE="PPR", VARIABLE="Fitness", IGNORE_PREVIOUS=TRUE, VERBOSE=TRUE) { #c("Identifier")
   # Manage incorrect TYPE
   if (!(TYPE %in% c("PPR","LDA","PCA","NMDS"))) {
     cat("Error: type incorrect\n")
@@ -38,17 +37,17 @@ DRA <- DimReduction <- function(DF=df, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE="PPR",
   }
   
   # Figure out EXCLUSION versus INCLUSION
-  if (EXCLUDE != FALSE && INCLUDE != FALSE) {
+  if (!is.null(EXCLUDE) && !is.null(INCLUDE)) {
     if (VERBOSE==TRUE) cat("Warning: both EXCLUDE and INCLUDE triggered (perhaps implicitly), taking set difference\n")
-    return(DimReduction(DF, EXCLUDE=FALSE, INCLUDE=setdiff(INCLUDE, EXCLUDE), TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)) 
-  } else if (EXCLUDE == FALSE && INCLUDE != FALSE) {
+    return(DimReduction(DF, EXCLUDE=NULL, INCLUDE=setdiff(INCLUDE, EXCLUDE), TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS)) 
+  } else if (is.null(EXCLUDE) && !is.null(INCLUDE)) {
     exclude_vector <- setdiff(INCL_EXCL(DF,INCLUDE),VARIABLE)
-    if (length(exclude_vector)==0) exclude_vector <- FALSE
-    return(DimReduction(DF, EXCLUDE=exclude_vector, INCLUDE=FALSE, TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS))
-  } else if(EXCLUDE == FALSE && INCLUDE == FALSE) {
+    if (length(exclude_vector)==0) exclude_vector <- NULL
+    return(DimReduction(DF, EXCLUDE=exclude_vector, INCLUDE=NULL, TYPE=TYPE, VARIABLE=VARIABLE, IGNORE_PREVIOUS=IGNORE_PREVIOUS))
+  } else if(is.null(EXCLUDE) && is.null(INCLUDE)) {
     EXCLUDE <- c()
     exclusion_df <- data.frame()
-  } else if (EXCLUDE != FALSE && INCLUDE == FALSE) {
+  } else if (!is.null(EXCLUDE) && is.null(INCLUDE)) {
     exclusion_df <- DF[,EXCLUDE]
     DF[,EXCLUDE] <- NULL
   }
@@ -91,7 +90,9 @@ DRA <- DimReduction <- function(DF=df, EXCLUDE=FALSE, INCLUDE=FALSE, TYPE="PPR",
     names(output) <- c("columns","weights","ppr")
     return(output)
   } else if (TYPE == "LDA") {
+    # print(paste(VARIABLE,paste(INCL_EXCL(DF,c(VARIABLE)),collapse=" + "), sep=" ~ "))
     FORMULA <- as.formula(paste(VARIABLE,paste(INCL_EXCL(DF,c(VARIABLE)),collapse=" + "), sep=" ~ "))
+    print(FORMULA)
     df.lda <- MASS::lda(FORMULA, DF)
     LD1 <- dotprod2(DF[,INCL_EXCL(DF,VARIABLE)], df.lda$scaling[,"LD1"])
     if (ncol(df.lda$scaling) >= 2) {
@@ -178,7 +179,7 @@ PPR_bootstrap <- PPR_replicates <- function(DF=df, EXCLUDE=c("Identifier"), INCL
 
 # Returns a fitness landscape given specific parameters
 landscape <- TPS_landscape <- function(DF=df, x="PP1", y="PP2", output="contour", Theta=30, Phi=30, z="Fitness", x_name=x, y_name=y, z_name=z, Lambda="default", zlim=NULL, COLOUR="rainbow") {
-  par(mar=c(5,5,2,1)+.1)
+  # par(mar=c(5,5,2,1)+.1)
   Var1 <- DF[,x]
   Var2 <- DF[,y]
   Fitness <- DF[,z]

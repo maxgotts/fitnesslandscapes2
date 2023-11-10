@@ -1,6 +1,6 @@
 bibentry(bibtype = "Manual",
-         title = "{fitnesslandscapes2}: Tools for Fitness Landscapes 2.0",
+         title = "{futureInterpolate}: Tools for Predicting Future Fitness",
          author = c(person("Max", "Gotts"),
                     person("Lost Years Institute")),
          year = year,
-         url = "https://CRAN.R-project.org/package=fitneslandscapes2")
+         url = "https://CRAN.R-project.org/package=futureInterpolate")
